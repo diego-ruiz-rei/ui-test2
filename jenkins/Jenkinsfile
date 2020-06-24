@@ -168,7 +168,7 @@ spec:
             }
             steps {
                 container('tools') {
-                    sh "git clone https://$GIT_CREDS_USR:$GIT_CREDS_PSW@github.com/diego-ruiz-rei/ui-test-deploy.git"
+                    sh "git clone https://$GIT_CREDS_USR:$GIT_CREDS_PSW@github.com/diego-ruiz-rei/ui-test2-deploy.git"
                     sh "git config --global user.email 'ci@ci.com'"
 
                     dir("ui-test-deploy") {
