@@ -63,6 +63,11 @@ spec:
     command:
     - cat
     tty: true
+  - name: trivy
+    image: aquasec/trivy:latest
+    command:
+    - cat
+    tty: true
   volumes:
   # use host docker
   - name: docker-sock
@@ -180,49 +185,15 @@ spec:
                 }
             }
         }
-    //   stage('Twistlock Scan & Publish') {
-    //         when {
-    //             expression {
-    //                 return ((env.BRANCH_NAME.startsWith('PR-') && env.CHANGE_BRANCH.startsWith('feature-') && env.CHANGE_TARGET.startsWith('develop')) || env.BRANCH_NAME.startsWith('feature-') || env.BRANCH_NAME == 'develop')
-    //             }
-    //         }
-    //         stages {
-    //             stage('Twistlock Scan') {
-    //                 steps {
-    //                     twistlockScan ca: '',
-    //                         cert: '',
-    //                         policy: 'warn',
-    //                         compliancePolicy: 'critical',
-    //                         containerized: true,
-    //                         dockerAddress: 'unix:///var/run/docker.sock',
-    //                         gracePeriodDays: 0,
-    //                         ignoreImageBuildTime: true,
-    //                         key: '',
-    //                         logLevel: 'true',
-    //                         requirePackageUpdate: false,
-    //                         timeout: 10,
-    //                         repository: '${DOCKER_REGISTRY}',
-    //                         tag: '${APP_VERSION}',
-    //                         image: env.BRANCH_NAME == 'develop' ? '${env.BUILD}/${APPLICATION_BUILD_NAME}:${APP_VERSION}':'${env.FEATURE}/${APPLICATION_BUILD_NAME}:${APP_VERSION}' // Identify the namespace where the image was pushed to based on the commit branch.
-    //                     }
-    //                }
 
-    //                stage('Twistlock Publish') {
-    //                     steps {
-    //                         twistlockPublish ca: '',
-    //                             cert: '',
-    //                             dockerAddress: 'unix:///var/run/docker.sock',
-    //                             ignoreImageBuildTime: true,
-    //                             repository: '${DOCKER_REGISTRY}',
-    //                             tag: '${APP_VERSION}',
-    //                             image: env.BRANCH_NAME == 'develop' ? '${env.BUILD}/${APPLICATION_BUILD_NAME}:${APP_VERSION}':'${env.FEATURE}/${APPLICATION_BUILD_NAME}:${APP_VERSION}', // Identify the namespace where the image was pushed to based on the commit branch.
-    //                             key: '',
-    //                             logLevel: 'true',
-    //                             timeout: 10
-    //                     }
-    //                }
-    //           }
-    //     }
+        stage('Trivy scan'){
+            steps{
+                container('trivy'){
+                    sh "trivy image diegoruizrei/ui-test2:${env.GIT_COMMIT}"
+
+                }
+            }
+        }
     }
 }
 
