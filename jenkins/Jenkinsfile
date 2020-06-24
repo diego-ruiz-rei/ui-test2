@@ -97,11 +97,13 @@ spec:
         //Run Maven unit tests
         stage('Unit Test') {
             steps {
-                container('puppeteer'){
-                    // Report back to github: Status Check PENDING
-                    // notifyGithubStatusCheck('PENDING', 'Continuous integration: Run unit test!')
+                container('node'){
+                    container('puppeteer'){
+                        // Report back to github: Status Check PENDING
+                        // notifyGithubStatusCheck('PENDING', 'Continuous integration: Run unit test!')
 
-                    sh 'CI=true npm run test:headless'
+                        sh 'CI=true npm run test:headless'
+                    }
                 }
             }
             post {
