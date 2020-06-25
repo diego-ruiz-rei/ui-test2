@@ -233,7 +233,7 @@ spec:
                                 submoduleCfg                     : [],
                                 userRemoteConfigs                : [[
                                                                         url          : 'https://github.com/diego-ruiz-rei/selenium-ui-test.git',
-                                                                        credentialsId: ''
+                                                                        credentialsId: 'git'
                                                                     ]]
                         ])
 
