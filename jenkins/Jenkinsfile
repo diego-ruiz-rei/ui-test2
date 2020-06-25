@@ -88,6 +88,10 @@ spec:
   - name: node-slave-pvc2
     hostPath:
       path: /root/npmcache
+  # cache maven dependencies onto pvc between builds
+  - name: maven-slave-pvc2
+    hostPath:
+      path: /root/.m2
 """
         }
     }
