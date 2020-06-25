@@ -10,8 +10,7 @@
     "lint": "ng lint",
     "prod": "ng build",
     "server:prod": "nginx -g 'daemon off;'",
-    "e2e": "ng e2e",
-    "postinstall": "ngcc"
+    "e2e": "ng e2e"
   },
   "private": true,
   "dependencies": {
