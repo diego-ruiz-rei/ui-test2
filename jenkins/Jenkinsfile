@@ -15,7 +15,7 @@ def sonarLogin, sonarPassword
 def DOCKERFILE_PATH, APPLICATION_BUILD_NAME, DOCKER_REGISTRY, SONARQUBE_SECRET, SONARQUBE_URL, APP_VERSION, HOSTNAME_SUFFIX, SELENIUM_HUB, APPLICATION_URL_DEV
 //def clusterUrl = openshift.cluster();
 //echo "Now using cluster with url ${clusterUrl}"
-SELENIUM_HUB = "https://selenium-hub.drtest.reisys.io/wd/hub"
+SELENIUM_HUB = "http://selenium-hub.drtest.reisys.io/wd/hub"
 APPLICATION_URL_DEV = "http://demo-ui2.drtest.reisys.io"
 pipeline {
     agent {
