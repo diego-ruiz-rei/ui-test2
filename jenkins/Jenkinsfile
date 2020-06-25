@@ -217,39 +217,40 @@ spec:
             //     }
             // }
             steps {
-                container ('maven'){
-                    container('tools') {
-                        script {
+                container('tools') {
+                    script {
 
-                            sh "mkdir acceptance-tests"
+                        sh "mkdir acceptance-tests"
+                        sh "chmod 777 acceptance-tests"
 
-                            // checkout acceptance tests repo to acceptance-tests dir in the current workspace
-                            checkout([$class                           : 'GitSCM',
-                                    branches                         : [[name: '*/master']],
-                                    doGenerateSubmoduleConfigurations: false,
-                                    extensions                       : [[
-                                                                            $class           : 'RelativeTargetDirectory',
-                                                                            relativeTargetDir: 'acceptance-tests'
-                                                                        ]],
-                                    submoduleCfg                     : [],
-                                    userRemoteConfigs                : [[
-                                                                            url          : 'https://github.com/diego-ruiz-rei/selenium-ui-test.git',
-                                                                            credentialsId: 'git'
-                                                                        ]]
-                            ])
+                        // checkout acceptance tests repo to acceptance-tests dir in the current workspace
+                        checkout([$class                           : 'GitSCM',
+                                branches                         : [[name: '*/master']],
+                                doGenerateSubmoduleConfigurations: false,
+                                extensions                       : [[
+                                                                        $class           : 'RelativeTargetDirectory',
+                                                                        relativeTargetDir: 'acceptance-tests'
+                                                                    ]],
+                                submoduleCfg                     : [],
+                                userRemoteConfigs                : [[
+                                                                        url          : 'https://github.com/diego-ruiz-rei/selenium-ui-test.git',
+                                                                        credentialsId: 'git'
+                                                                    ]]
+                        ])
 
+                        container ('maven'){
                             // run acceptance tests
                             sh "cd acceptance-tests && mvn clean verify serenity:aggregate -Dwebdriver.driver=remote -Dwebdriver.remote.driver=chrome -Dwebdriver.remote.url=${SELENIUM_HUB} -Dwebdriver.base.url=${APPLICATION_URL_DEV} -Dserenity.proxy.http=0.0.0.0 -Dserenity.proxy.http_port=8080"
-
-                            // public report
-                            publishHTML([allowMissing: false, alwaysLinkToLastBuild: true, keepAll: true, reportDir: 'acceptance-tests/target/site/serenity/', reportFiles: 'index.html', reportName: 'Integration Test Report', reportTitles: 'COMET Tests'])
-
-                            //publish 508 compliance report files
-                            //zip zipFile: 'AccessibilityReport.zip', archive: true, dir: 'acceptance-tests/target/AccessibilityReport/'
-                            archiveArtifacts allowEmptyArchive: true, artifacts: 'acceptance-tests/target/AccessibilityReport/*.txt', onlyIfSuccessful: false, fingerprint: true
                         }
+                        // public report
+                        publishHTML([allowMissing: false, alwaysLinkToLastBuild: true, keepAll: true, reportDir: 'acceptance-tests/target/site/serenity/', reportFiles: 'index.html', reportName: 'Integration Test Report', reportTitles: 'COMET Tests'])
+
+                        //publish 508 compliance report files
+                        //zip zipFile: 'AccessibilityReport.zip', archive: true, dir: 'acceptance-tests/target/AccessibilityReport/'
+                        archiveArtifacts allowEmptyArchive: true, artifacts: 'acceptance-tests/target/AccessibilityReport/*.txt', onlyIfSuccessful: false, fingerprint: true
                     }
                 }
+                
             }
         }
     }
