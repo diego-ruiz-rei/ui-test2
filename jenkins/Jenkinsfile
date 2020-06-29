@@ -10,7 +10,6 @@ library identifier: "pipeline-library@master",
         )
 def baseUrl="drtest0629.reisys.io"
 // Define variables for the pipeline usage
-def customImage
 def sonarLogin, sonarPassword
 def DOCKERFILE_PATH, APPLICATION_BUILD_NAME, DOCKER_REGISTRY, SONARQUBE_SECRET, SONARQUBE_URL, APP_VERSION, HOSTNAME_SUFFIX, SELENIUM_HUB, APPLICATION_URL_DEV
 //def clusterUrl = openshift.cluster();
