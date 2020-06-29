@@ -193,7 +193,7 @@ spec:
                         sh "export TRIVY_AUTH_URL=https://docker.${baseUrl}"
                         sh "export TRIVY_USERNAME=${user}"
                         sh "export TRIVY_PASSWORD=${pass}"
-                        sh "trivy image docker.${baseUrl}/ui-test:0.0.${env.GIT_COMMIT}"
+                        sh "trivy image docker.${baseUrl}/ui-test:0.0.${env.BUILD_NUMBER}"
                     }
                 }
             }
@@ -209,7 +209,7 @@ spec:
                     sh "git config --global user.email 'ci@ci.com'"
 
                     dir("ui-test2-deploy") {
-                        sh "cd ./base && kustomize edit set image docker.${baseUrl}/ui-test:0.0.${env.GIT_COMMIT}"
+                        sh "cd ./base && kustomize edit set image docker.${baseUrl}/ui-test:0.0.${env.BUILD_NUMBER}"
                         sh "git commit -am 'Publish new version' && git push || echo 'no changes'"
                     }
                 }
