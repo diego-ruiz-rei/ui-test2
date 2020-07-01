@@ -1,7 +1,7 @@
 #!groovy
 // This script works with native Jenkins pipeline
 // Jenkins declarative Pipeline as it is the future: https://stackoverflow.com/questions/44657896/jenkins-pipeline-jenkinsfile-node-and-pipeline-directives
-def baseUrl="drtest0629.reisys.io"
+def baseUrl="jmeks2020.reisys.io"
 // Define variables for the pipeline usage
 def sonarLogin, sonarPassword
 def DOCKERFILE_PATH, APPLICATION_BUILD_NAME, DOCKER_REGISTRY, SONARQUBE_SECRET, SONARQUBE_URL, APP_VERSION, HOSTNAME_SUFFIX, SELENIUM_HUB, APPLICATION_URL_DEV
