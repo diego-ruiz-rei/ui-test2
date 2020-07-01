@@ -1,13 +1,6 @@
 #!groovy
 // This script works with native Jenkins pipeline
 // Jenkins declarative Pipeline as it is the future: https://stackoverflow.com/questions/44657896/jenkins-pipeline-jenkinsfile-node-and-pipeline-directives
-library identifier: "pipeline-library@master",
-        retriever: modernSCM(
-                [
-                        $class: "GitSCMSource",
-                        remote: "https://github.com/REI-Systems/pipeline-library.git"
-                ]
-        )
 def baseUrl="drtest0629.reisys.io"
 // Define variables for the pipeline usage
 def sonarLogin, sonarPassword
@@ -17,8 +10,8 @@ def DOCKERFILE_PATH, APPLICATION_BUILD_NAME, DOCKER_REGISTRY, SONARQUBE_SECRET, 
 SELENIUM_HUB = "http://selenium-hub.${baseUrl}/wd/hub"
 APPLICATION_URL_DEV = "http://demo-ui2.${baseUrl}"
 pipeline {
-    agent {
-        kubernetes {
+  agent {
+    kubernetes {
       yaml """
 apiVersion: v1
 kind: Pod
@@ -84,7 +77,7 @@ spec:
   volumes:
   # use host docker
   - name: docker-sock
-    hostPath: 
+    hostPath:
       path: /var/run/docker.sock
   # cache node dependencies onto pvc between builds
   - name: node-slave-pvc2
@@ -95,172 +88,199 @@ spec:
     hostPath:
       path: /root/.m2
 """
+    }
+  }
+
+  options {
+    // set a timeout of 20 minutes for this pipeline
+    timeout(time: 75, unit: 'MINUTES')
+  }
+
+  // Pipeline Stages start here
+  // Requeres at least one stage
+  stages {
+    stage('install dependencies') {
+      when {
+        expression {
+          return ((env.BRANCH_NAME.startsWith('PR-') && env.CHANGE_BRANCH.startsWith('feature-') && env.CHANGE_TARGET.startsWith('develop')) || env.BRANCH_NAME.startsWith('feature-') || env.BRANCH_NAME == 'develop')
         }
+      }
+      steps {
+        container('node'){
+          //sh 'ls node_modules'
+          sh 'ls /root/npmcache'
+          sh 'export PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true'
+          sh 'npm install --prefer-offline --cache=/root/npmcache'
+
+          // print out all environments
+          sh 'printenv'
+        }
+      }
+    }
+    //Run Maven unit tests
+    stage('Unit Test') {
+      when {
+        expression {
+          return ((env.BRANCH_NAME.startsWith('PR-') && env.CHANGE_BRANCH.startsWith('feature-') && env.CHANGE_TARGET.startsWith('develop')) || env.BRANCH_NAME.startsWith('feature-') || env.BRANCH_NAME == 'develop')
+        }
+      }
+      steps {
+        container('node'){
+          container('puppeteer'){
+            // Report back to github: Status Check PENDING
+            // notifyGithubStatusCheck('PENDING', 'Continuous integration: Run unit test!')
+
+            sh 'CI=true npm run test:headless'
+          }
+        }
+      }
+      post {
+        always {
+          // publish  report
+          publishHTML(target: [
+            reportDir            : "./reports/coverage",
+            reportFiles          : 'index.html',
+            reportName           : 'Istanbul Report (Code Coverage)',
+            keepAll              : true,
+            alwaysLinkToLastBuild: true,
+            allowMissing         : false
+          ])
+        }
+      }
     }
 
-    options {
-        // set a timeout of 20 minutes for this pipeline
-        timeout(time: 75, unit: 'MINUTES')
+    stage('SonarQube Code Analysis') {
+      when {
+        expression {
+          return ((env.BRANCH_NAME.startsWith('PR-') && env.CHANGE_BRANCH.startsWith('feature-') && env.CHANGE_TARGET.startsWith('develop')) || env.BRANCH_NAME.startsWith('feature-') || env.BRANCH_NAME == 'develop')
+        }
+      }
+      steps {
+        // Report back to github: Status Check PENDING
+        //notifyGithubStatusCheck('PENDING', 'Continuous integration: Run code analysis!')
+
+        script {
+          withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: "sonar", passwordVariable: 'pass', usernameVariable: 'user']]) {
+            sonarLogin = '${user}'
+            sonarPassword = '${pass}'
+            // Run Sonar in this block would result into authorization issue. As the ${user} and ${pass} are encrypted ***** **** instead of plan values
+            container('sonar'){
+              // Create a new SonarQube analysis and dashboard for this new/updated feature branch / app
+              //def additionalParams =  (env.BRANCH_NAME.startsWith('feature-')) ? " -Dsonar.projectKey=${APPLICATION_BUILD_NAME} -Dsonar.projectName=${APPLICATION_BUILD_NAME} -Dsonar.projectVersion=${env.GIT_COMMIT.substring(0, 6)}" : ""
+
+              // Run Sonar in this block to ensure user/pass are not encrypted
+              sh "sonar-scanner -Dsonar.host.url=http://sonarqube-sonarqube:9000 -Dsonar.login=${user} -Dsonar.password=${pass}"// ${additionalParams}"
+            }
+          }
+        }
+      }
     }
 
-    // Pipeline Stages start here
-    // Requeres at least one stage
-    stages {
-        stage('install dependencies') {
-            steps {
-                container('node'){
-                    //sh 'ls node_modules'
-                    sh 'ls /root/npmcache'
-                    sh 'export PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true'
-                    sh 'npm install --prefer-offline --cache=/root/npmcache'
-                }
-            }
+    stage('Build and Deploy Image'){
+      when {
+        expression {
+          return (env.BRANCH_NAME.startsWith('feature-') || env.BRANCH_NAME == 'develop')
         }
-        //Run Maven unit tests
-        stage('Unit Test') {
-            steps {
-                container('node'){
-                    container('puppeteer'){
-                        // Report back to github: Status Check PENDING
-                        // notifyGithubStatusCheck('PENDING', 'Continuous integration: Run unit test!')
-
-                        sh 'CI=true npm run test:headless'
-                    }
-                }
+      }
+      steps{
+        container('node'){
+          sh 'npm run prod'
+          container('docker'){
+            script {
+              docker.withRegistry('https://docker.'+baseUrl, 'nexus') {
+                def customImage = docker.build("docker.${baseUrl}/ui-test:0.0.${env.BUILD_NUMBER}", "--network=host .")
+                customImage.push()
+              }
             }
-            post {
-                always {
-                    // publish  report
-                    publishHTML(target: [
-                      reportDir            : "./reports/coverage",
-                      reportFiles          : 'index.html',
-                      reportName           : 'Istanbul Report (Code Coverage)',
-                      keepAll              : true,
-                      alwaysLinkToLastBuild: true,
-                      allowMissing         : false
-                    ])
-                }
-            }
+          }
         }
-
-        stage('SonarQube Code Analysis') {
-            // when {
-            //     expression {
-            //         return ((env.BRANCH_NAME.startsWith('PR-') && env.CHANGE_BRANCH.startsWith('feature-') && env.CHANGE_TARGET.startsWith('develop')) || env.BRANCH_NAME.startsWith('feature-') || env.BRANCH_NAME == 'develop')
-            //     }
-            // }
-            steps {
-                // Report back to github: Status Check PENDING
-                //notifyGithubStatusCheck('PENDING', 'Continuous integration: Run code analysis!')
-
-                script {
-                    withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: "sonar", passwordVariable: 'pass', usernameVariable: 'user']]) {
-                        sonarLogin = '${user}'
-                        sonarPassword = '${pass}'
-                        // Run Sonar in this block would result into authorization issue. As the ${user} and ${pass} are encrypted ***** **** instead of plan values
-                        container('sonar'){
-                            // Create a new SonarQube analysis and dashboard for this new/updated feature branch / app
-                            //def additionalParams =  (env.BRANCH_NAME.startsWith('feature-')) ? " -Dsonar.projectKey=${APPLICATION_BUILD_NAME} -Dsonar.projectName=${APPLICATION_BUILD_NAME} -Dsonar.projectVersion=${env.GIT_COMMIT.substring(0, 6)}" : ""
-
-                            // Run Sonar in this block to ensure user/pass are not encrypted
-                            sh "sonar-scanner -Dsonar.host.url=http://sonarqube-sonarqube:9000 -Dsonar.login=${user} -Dsonar.password=${pass}"// ${additionalParams}"
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Build and Deploy Image'){
-            steps{
-                container('node'){
-                    sh 'npm run prod'
-                    container('docker'){
-                        script {
-                            docker.withRegistry('https://docker.'+baseUrl, 'nexus') {
-                                def customImage = docker.build("docker.${baseUrl}/ui-test:0.0.${env.BUILD_NUMBER}", "--network=host .")
-                                customImage.push()
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Trivy scan'){
-            steps{
-                container('trivy'){
-                    withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: "nexus", passwordVariable: 'pass', usernameVariable: 'user']]) {
-                        sh "export TRIVY_AUTH_URL=https://docker.${baseUrl}"
-                        sh "export TRIVY_USERNAME=${user}"
-                        sh "export TRIVY_PASSWORD=${pass}"
-                        sh "trivy image docker.${baseUrl}/ui-test:0.0.${env.BUILD_NUMBER}"
-                    }
-                }
-            }
-        }
-
-        stage('Promote from Build to Dev') {
-            environment {
-                GIT_CREDS = credentials('git')
-            }
-            steps {
-                container('tools') {
-                    sh "git clone https://$GIT_CREDS_USR:$GIT_CREDS_PSW@github.com/diego-ruiz-rei/ui-test2-deploy.git"
-                    sh "git config --global user.email 'ci@ci.com'"
-
-                    dir("ui-test2-deploy") {
-                        sh "cd ./base && kustomize edit set image docker.${baseUrl}/ui-test:0.0.${env.BUILD_NUMBER}"
-                        sh "git commit -am 'Publish new version' && git push || echo 'no changes'"
-                    }
-                }
-            }
-        }
-
-        stage('Running Serenity/Selenium Tests') {
-            // when {
-            //     expression {
-            //         return env.BRANCH_NAME == 'develop'
-            //         // return env.BRANCH_NAME == 'feature-zap' //TODO: remove me
-            //     }
-            // }
-            steps {
-                container('tools') {
-                    script {
-
-                        sh "mkdir acceptance-tests"
-                        sh "chmod 777 acceptance-tests"
-
-                        // checkout acceptance tests repo to acceptance-tests dir in the current workspace
-                        checkout([$class                           : 'GitSCM',
-                                branches                         : [[name: '*/master']],
-                                doGenerateSubmoduleConfigurations: false,
-                                extensions                       : [[
-                                                                        $class           : 'RelativeTargetDirectory',
-                                                                        relativeTargetDir: 'acceptance-tests'
-                                                                    ]],
-                                submoduleCfg                     : [],
-                                userRemoteConfigs                : [[
-                                                                        url          : 'https://github.com/diego-ruiz-rei/selenium-ui-test.git',
-                                                                        credentialsId: 'git'
-                                                                    ]]
-                        ])
-
-                        container ('maven'){
-                            // run acceptance tests
-                            sh "cd acceptance-tests && mvn clean verify serenity:aggregate -Dwebdriver.driver=remote -Dwebdriver.remote.driver=chrome -Dwebdriver.remote.url=${SELENIUM_HUB} -Dwebdriver.base.url=${APPLICATION_URL_DEV} -Dserenity.proxy.http=0.0.0.0 -Dserenity.proxy.http_port=8080"
-                        }
-                        // public report
-                        publishHTML([allowMissing: false, alwaysLinkToLastBuild: true, keepAll: true, reportDir: 'acceptance-tests/target/site/serenity/', reportFiles: 'index.html', reportName: 'Integration Test Report', reportTitles: 'COMET Tests'])
-
-                        //publish 508 compliance report files
-                        //zip zipFile: 'AccessibilityReport.zip', archive: true, dir: 'acceptance-tests/target/AccessibilityReport/'
-                        archiveArtifacts allowEmptyArchive: true, artifacts: 'acceptance-tests/target/AccessibilityReport/*.txt', onlyIfSuccessful: false, fingerprint: true
-                    }
-                }
-                
-            }
-        }
+      }
     }
+
+    stage('Trivy scan'){
+      when {
+        expression {
+          return ((env.BRANCH_NAME.startsWith('PR-') && env.CHANGE_BRANCH.startsWith('feature-') && env.CHANGE_TARGET.startsWith('develop')) || env.BRANCH_NAME.startsWith('feature-') || env.BRANCH_NAME == 'develop')
+        }
+      }
+      steps{
+        container('trivy'){
+          withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: "nexus", passwordVariable: 'pass', usernameVariable: 'user']]) {
+            sh "export TRIVY_AUTH_URL=https://docker.${baseUrl}"
+            sh "export TRIVY_USERNAME=${user}"
+            sh "export TRIVY_PASSWORD=${pass}"
+            sh "trivy image docker.${baseUrl}/ui-test:0.0.${env.BUILD_NUMBER}"
+          }
+        }
+      }
+    }
+
+    stage('Promote from Build to Dev') {
+      when {
+        expression {
+          return env.BRANCH_NAME == 'develop'
+        }
+      }
+      environment {
+        GIT_CREDS = credentials('git')
+      }
+      steps {
+        container('tools') {
+          sh "git clone https://$GIT_CREDS_USR:$GIT_CREDS_PSW@github.com/diego-ruiz-rei/ui-test2-deploy.git"
+          sh "git config --global user.email 'ci@ci.com'"
+
+          dir("ui-test2-deploy") {
+            sh "cd ./base && kustomize edit set image docker.${baseUrl}/ui-test:0.0.${env.BUILD_NUMBER}"
+            sh "git commit -am 'Publish new version' && git push || echo 'no changes'"
+          }
+        }
+      }
+    }
+
+    stage('Running Serenity/Selenium Tests') {
+      when {
+        expression {
+          return env.BRANCH_NAME == 'develop'
+          // return env.BRANCH_NAME == 'feature-zap' //TODO: remove me
+        }
+      }
+      steps {
+        container('tools') {
+          script {
+
+            sh "mkdir acceptance-tests"
+            sh "chmod 777 acceptance-tests"
+
+            // checkout acceptance tests repo to acceptance-tests dir in the current workspace
+            checkout([$class                           : 'GitSCM',
+                      branches                         : [[name: '*/master']],
+                      doGenerateSubmoduleConfigurations: false,
+                      extensions                       : [[
+                                                            $class           : 'RelativeTargetDirectory',
+                                                            relativeTargetDir: 'acceptance-tests'
+                                                          ]],
+                      submoduleCfg                     : [],
+                      userRemoteConfigs                : [[
+                                                            url          : 'https://github.com/diego-ruiz-rei/selenium-ui-test.git',
+                                                            credentialsId: 'git'
+                                                          ]]
+            ])
+
+            container ('maven'){
+              // run acceptance tests
+              sh "cd acceptance-tests && mvn clean verify serenity:aggregate -Dwebdriver.driver=remote -Dwebdriver.remote.driver=chrome -Dwebdriver.remote.url=${SELENIUM_HUB} -Dwebdriver.base.url=${APPLICATION_URL_DEV} -Dserenity.proxy.http=0.0.0.0 -Dserenity.proxy.http_port=8080"
+            }
+            // public report
+            publishHTML([allowMissing: false, alwaysLinkToLastBuild: true, keepAll: true, reportDir: 'acceptance-tests/target/site/serenity/', reportFiles: 'index.html', reportName: 'Integration Test Report', reportTitles: 'COMET Tests'])
+
+            //publish 508 compliance report files
+            //zip zipFile: 'AccessibilityReport.zip', archive: true, dir: 'acceptance-tests/target/AccessibilityReport/'
+            archiveArtifacts allowEmptyArchive: true, artifacts: 'acceptance-tests/target/AccessibilityReport/*.txt', onlyIfSuccessful: false, fingerprint: true
+          }
+        }
+      }
+    }
+  }
 }
 
 // Report back to github: Status Check to enable or disable the PR for merge
