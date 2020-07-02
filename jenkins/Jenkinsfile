@@ -205,6 +205,9 @@ spec:
           return (env.BRANCH_NAME.startsWith('feature-') || env.BRANCH_NAME == 'develop')
         }
       }
+      environment {
+        GIT_CREDS = credentials('git')
+      }
       steps{
         container('node'){
           sh 'npm run prod'
