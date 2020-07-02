@@ -235,6 +235,17 @@ spec:
                   dir("ui-test2-deploy") {
                     sh "cd ./feature && kustomize edit set image docker.${baseUrl}/${APPLICATION_BUILD_NAME}:${APP_VERSION}-${env.BUILD_NUMBER}"
                     sh "git commit -am 'Publish new version' && git push || echo 'no changes'"
+
+                    // Spin up application on demand
+                    withCredentials([string(credentialsId: "argocd-ci", variable: 'ARGOCD_AUTH_TOKEN')]) {
+                      sh "export ARGOCD_SERVER=argocd.${baseUrl}"
+                      // Already been set by `withCredentials`
+                      // sh "export ARGOCD_AUTH_TOKEN=${ARGOCD_AUTH_TOKEN}"
+                      // sh "argocd app create ${APPLICATION_BUILD_NAME}-${APP_VERSION} --file feature/manifest.yaml --dest-server https://kubernetes.default.svc --dest-namespace default"
+                      // sh "argocd app sync ${APPLICATION_BUILD_NAME}-${APP_VERSION}"
+                      sh "argocd app sync ${APPLICATION_BUILD_NAME}-${APP_VERSION} --local feature/"
+                      sh "argocd app wait ${APPLICATION_BUILD_NAME}-${APP_VERSION} --timeout 600"
+                    }
                   }
                 }
               }
