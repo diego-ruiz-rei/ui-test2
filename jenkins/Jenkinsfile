@@ -1,4 +1,5 @@
 #!groovy
+// https://github.com/argoproj/argo-cd-hello-world-app/blob/master/Jenkinsfile
 // This script works with native Jenkins pipeline
 // Jenkins declarative Pipeline as it is the future: https://stackoverflow.com/questions/44657896/jenkins-pipeline-jenkinsfile-node-and-pipeline-directives
 def baseUrl="jmeks2020.reisys.io"
@@ -65,7 +66,17 @@ spec:
     tty: true
   # used to run argocd/cli processes for feature branches
   - name: argocli
-    image: argoproj/argocli:latest
+    image: argoproj/argocd-cli:latest
+    command:
+    - cat
+    tty: true
+  - name: kubectl
+    image: lachlanevenson/k8s-kubectl:latest
+    command:
+    - cat
+    tty: true
+  - name: helm
+    image: lachlanevenson/k8s-helm:latest
     command:
     - cat
     tty: true
@@ -204,6 +215,18 @@ spec:
             }
           }
         }
+      }
+    }
+
+    stage('Run kubectl') {
+      container('kubectl') {
+        sh "kubectl get pods"
+      }
+    }
+
+    stage('Run helm') {
+      container('helm') {
+        sh "helm list"
       }
     }
 
