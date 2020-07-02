@@ -229,7 +229,7 @@ spec:
     stage('Run helm') {
       steps {
         container('helm') {
-          sh "helm list"
+          // sh "helm list"
         }
       }
     }
