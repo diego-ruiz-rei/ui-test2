@@ -116,10 +116,10 @@ spec:
 
             // setup application version and name if this branch requires app on demand
             if (env.BRANCH_NAME.startsWith('feature-')) {
-              APP_VERSION = env.BRANCH_NAME.replaceAll('/', '')
+              APP_VERSION = env.BRANCH_NAME.replaceAll('/', '') + '-' + env.BUILD_NUMBER
             } else if (env.BRANCH_NAME.startsWith('PR-') && env.CHANGE_BRANCH.startsWith('feature-') && env.CHANGE_TARGET.startsWith('develop')) {
               // get the feature branch name from different variable when this is a PR case and not a commit to the feature branch itself
-              APP_VERSION = env.CHANGE_BRANCH.replaceAll('/', '')
+              APP_VERSION = env.CHANGE_BRANCH.replaceAll('/', '') + '-' + env.BUILD_NUMBER
             }
           }
         }
