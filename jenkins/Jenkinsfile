@@ -214,6 +214,19 @@ spec:
                 def customImage = docker.build("docker.${baseUrl}/ui-test:${APP_VERSION}", "--network=host .")
                 customImage.push()
               }
+
+              // Multi-branch workflow for Build and Tag Image based based on the env.BRANCH_NAME
+              if (env.BRANCH_NAME.startsWith('feature-')) {
+                container('tools') {
+                  sh "git clone https://$GIT_CREDS_USR:$GIT_CREDS_PSW@github.com/JihadMotii-REISys/ui-test2-deploy.git"
+                  sh "git config --global user.email 'ci@ci.com'"
+
+                  dir("ui-test2-deploy") {
+                    sh "cd ./feature && kustomize edit set image docker.${baseUrl}/ui-test:${APP_VERSION}"
+                    sh "git commit -am 'Publish new version' && git push || echo 'no changes'"
+                  }
+                }
+              }
             }
           }
         }
@@ -249,11 +262,11 @@ spec:
       }
       steps {
         container('tools') {
-          sh "git clone https://$GIT_CREDS_USR:$GIT_CREDS_PSW@github.com/diego-ruiz-rei/ui-test2-deploy.git"
+          sh "git clone https://$GIT_CREDS_USR:$GIT_CREDS_PSW@github.com/JihadMotii-REISys/ui-test2-deploy.git"
           sh "git config --global user.email 'ci@ci.com'"
 
           dir("ui-test2-deploy") {
-            sh "cd ./base && kustomize edit set image docker.${baseUrl}/ui-test:${APP_VERSION}"
+            sh "cd ./develop && kustomize edit set image docker.${baseUrl}/ui-test:${APP_VERSION}"
             sh "git commit -am 'Publish new version' && git push || echo 'no changes'"
           }
         }
