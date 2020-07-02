@@ -4,11 +4,12 @@
 def baseUrl="jmeks2020.reisys.io"
 // Define variables for the pipeline usage
 def sonarLogin, sonarPassword
-def DOCKERFILE_PATH, APPLICATION_BUILD_NAME, DOCKER_REGISTRY, SONARQUBE_SECRET, SONARQUBE_URL, APP_VERSION, HOSTNAME_SUFFIX, SELENIUM_HUB, APPLICATION_URL_DEV
+def APPLICATION_BUILD_NAME, APP_VERSION, SELENIUM_HUB, APPLICATION_URL_DEV
 //def clusterUrl = openshift.cluster();
 //echo "Now using cluster with url ${clusterUrl}"
 SELENIUM_HUB = "http://selenium-hub.${baseUrl}/wd/hub"
 APPLICATION_URL_DEV = "http://demo-ui2.${baseUrl}"
+APPLICATION_BUILD_NAME = "ui-test"
 pipeline {
   agent {
     kubernetes {
@@ -189,10 +190,10 @@ spec:
             // Run Sonar in this block would result into authorization issue. As the ${user} and ${pass} are encrypted ***** **** instead of plan values
             container('sonar'){
               // Create a new SonarQube analysis and dashboard for this new/updated feature branch / app
-              //def additionalParams =  (env.BRANCH_NAME.startsWith('feature-')) ? " -Dsonar.projectKey=${APPLICATION_BUILD_NAME} -Dsonar.projectName=${APPLICATION_BUILD_NAME} -Dsonar.projectVersion=${env.GIT_COMMIT.substring(0, 6)}" : ""
+              def additionalParams =  (env.BRANCH_NAME.startsWith('feature-')) ? " -Dsonar.projectKey=${APPLICATION_BUILD_NAME}-${APP_VERSION} -Dsonar.projectName=${APPLICATION_BUILD_NAME}-${APP_VERSION} -Dsonar.projectVersion=${env.GIT_COMMIT.substring(0, 6)}" : ""
 
               // Run Sonar in this block to ensure user/pass are not encrypted
-              sh "sonar-scanner -Dsonar.host.url=http://sonarqube-sonarqube:9000 -Dsonar.login=${user} -Dsonar.password=${pass}"// ${additionalParams}"
+              sh "sonar-scanner -Dsonar.host.url=http://sonarqube-sonarqube:9000 -Dsonar.login=${user} -Dsonar.password=${pass} ${additionalParams}"
             }
           }
         }
@@ -214,7 +215,7 @@ spec:
           container('docker'){
             script {
               docker.withRegistry('https://docker.'+baseUrl, 'nexus') {
-                def customImage = docker.build("docker.${baseUrl}/ui-test:${APP_VERSION}", "--network=host .")
+                def customImage = docker.build("docker.${baseUrl}/${APPLICATION_BUILD_NAME}:${APP_VERSION}", "--network=host .")
                 customImage.push()
               }
 
@@ -225,7 +226,7 @@ spec:
                   sh "git config --global user.email 'ci@ci.com'"
 
                   dir("ui-test2-deploy") {
-                    sh "cd ./feature && kustomize edit set image docker.${baseUrl}/ui-test:${APP_VERSION}"
+                    sh "cd ./feature && kustomize edit set image docker.${baseUrl}/${APPLICATION_BUILD_NAME}:${APP_VERSION}"
                     sh "git commit -am 'Publish new version' && git push || echo 'no changes'"
                   }
                 }
@@ -248,7 +249,7 @@ spec:
             sh "export TRIVY_AUTH_URL=https://docker.${baseUrl}"
             sh "export TRIVY_USERNAME=${user}"
             sh "export TRIVY_PASSWORD=${pass}"
-            sh "trivy image docker.${baseUrl}/ui-test:${APP_VERSION}"
+            sh "trivy image docker.${baseUrl}/${APPLICATION_BUILD_NAME}:${APP_VERSION}"
           }
         }
       }
@@ -269,7 +270,7 @@ spec:
           sh "git config --global user.email 'ci@ci.com'"
 
           dir("ui-test2-deploy") {
-            sh "cd ./develop && kustomize edit set image docker.${baseUrl}/ui-test:${APP_VERSION}"
+            sh "cd ./develop && kustomize edit set image docker.${baseUrl}/${APPLICATION_BUILD_NAME}:${APP_VERSION}"
             sh "git commit -am 'Publish new version' && git push || echo 'no changes'"
           }
         }
