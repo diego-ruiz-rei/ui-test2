@@ -206,7 +206,7 @@ spec:
         }
       }
       environment {
-        GIT_CREDS = credentials('git')
+        GIT_CREDS = credentials('git-jm')
       }
       steps{
         container('node'){
@@ -261,7 +261,7 @@ spec:
         }
       }
       environment {
-        GIT_CREDS = credentials('git')
+        GIT_CREDS = credentials('git-jm')
       }
       steps {
         container('tools') {
