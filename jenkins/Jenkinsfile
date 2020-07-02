@@ -111,7 +111,6 @@ spec:
             println("env.CHANGE_ID:" + env.CHANGE_ID)
             // print out all environments
             sh 'printenv'
-            sh "mvn -version"
             sh "npm -v"
             sh "node -v"
 
