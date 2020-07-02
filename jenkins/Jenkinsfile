@@ -4,7 +4,7 @@
 def baseUrl="jmeks2020.reisys.io"
 // Define variables for the pipeline usage
 def sonarLogin, sonarPassword
-def APPLICATION_BUILD_NAME, APP_VERSION, SELENIUM_HUB, APPLICATION_URL_DEV, DOCKER_IMAGE, DOCKER_IMAGE_TAG
+def APPLICATION_BUILD_NAME, APP_VERSION, SELENIUM_HUB, APPLICATION_URL_DEV, DOCKER_IMAGE
 //def clusterUrl = openshift.cluster();
 //echo "Now using cluster with url ${clusterUrl}"
 SELENIUM_HUB = "http://selenium-hub.${baseUrl}/wd/hub"
@@ -119,13 +119,9 @@ spec:
             // setup application version and name if this branch requires app on demand
             if (env.BRANCH_NAME.startsWith('feature-')) {
               APP_VERSION = env.BRANCH_NAME.replaceAll('/', '')
-              DOCKER_IMAGE_TAG = "${APP_VERSION}-${env.BUILD_NUMBER}"
             } else if (env.BRANCH_NAME.startsWith('PR-') && env.CHANGE_BRANCH.startsWith('feature-') && env.CHANGE_TARGET.startsWith('develop')) {
               // get the feature branch name from different variable when this is a PR case and not a commit to the feature branch itself
               APP_VERSION = env.CHANGE_BRANCH.replaceAll('/', '')
-              DOCKER_IMAGE_TAG = "${APP_VERSION}-latest"
-            } else { // Develop/Master
-              DOCKER_IMAGE_TAG = "${APP_VERSION}"
             }
           }
         }
@@ -222,8 +218,12 @@ spec:
               docker.withRegistry('https://docker.'+baseUrl, 'nexus') {
                 DOCKER_IMAGE = docker.build("docker.${baseUrl}/${APPLICATION_BUILD_NAME}:${APP_VERSION}-${env.BUILD_NUMBER}", "--network=host .")
                 DOCKER_IMAGE.push()
-                // Push `DOCKER_IMAGE_TAG` tag for pipeline workflow
-                DOCKER_IMAGE.push(DOCKER_IMAGE_TAG)
+                // Always oush `latest` tag for either PR build or `master` build
+                if (env.BRANCH_NAME.startsWith('feature-')) {
+                  DOCKER_IMAGE.push("${APP_VERSION}-latest")
+                } else if(env.BRANCH_NAME == 'develop') {
+                  DOCKER_IMAGE.push("${APP_VERSION}")
+                }
               }
 
               // Multi-branch workflow for Build and Tag Image based based on the env.BRANCH_NAME
@@ -252,11 +252,14 @@ spec:
       }
       steps{
         container('trivy'){
-          withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: "nexus", passwordVariable: 'pass', usernameVariable: 'user']]) {
-            sh "export TRIVY_AUTH_URL=https://docker.${baseUrl}"
-            sh "export TRIVY_USERNAME=${user}"
-            sh "export TRIVY_PASSWORD=${pass}"
-            sh "trivy image docker.${baseUrl}/${APPLICATION_BUILD_NAME}:${DOCKER_IMAGE_TAG}"
+          script {
+            withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: "nexus", passwordVariable: 'pass', usernameVariable: 'user']]) {
+              sh "export TRIVY_AUTH_URL=https://docker.${baseUrl}"
+              sh "export TRIVY_USERNAME=${user}"
+              sh "export TRIVY_PASSWORD=${pass}"
+              def imageTag = (env.BRANCH_NAME.startsWith('PR-') && env.CHANGE_BRANCH.startsWith('feature-') && env.CHANGE_TARGET.startsWith('develop')) ? "${APP_VERSION}-latest" : "${APP_VERSION}-${env.BUILD_NUMBER}"
+              sh "trivy image docker.${baseUrl}/${APPLICATION_BUILD_NAME}:${imageTag}"
+            }
           }
         }
       }
@@ -365,7 +368,7 @@ spec:
             def imageTag = "master-${env.BUILD_NUMBER}"
             docker.withRegistry('https://docker.'+baseUrl, 'nexus') {
               // Pull APP_VERSION=`latest` image tagged through `develop` branch pipeline when a PR get's merged into it
-              DOCKER_IMAGE = docker.image("docker.${baseUrl}/${APPLICATION_BUILD_NAME}:${DOCKER_IMAGE_TAG}")
+              DOCKER_IMAGE = docker.image("docker.${baseUrl}/${APPLICATION_BUILD_NAME}:${APP_VERSION}")
               DOCKER_IMAGE.pull()
               DOCKER_IMAGE.push("${imageTag}")
             }
