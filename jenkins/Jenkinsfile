@@ -4,11 +4,13 @@
 def baseUrl="jmeks2020.reisys.io"
 // Define variables for the pipeline usage
 def sonarLogin, sonarPassword
-def DOCKERFILE_PATH, APPLICATION_BUILD_NAME, DOCKER_REGISTRY, SONARQUBE_SECRET, SONARQUBE_URL, APP_VERSION, HOSTNAME_SUFFIX, SELENIUM_HUB, APPLICATION_URL_DEV
+def APPLICATION_BUILD_NAME, APP_VERSION, SELENIUM_HUB, APPLICATION_URL_DEV, DOCKER_IMAGE
 //def clusterUrl = openshift.cluster();
 //echo "Now using cluster with url ${clusterUrl}"
 SELENIUM_HUB = "http://selenium-hub.${baseUrl}/wd/hub"
 APPLICATION_URL_DEV = "http://demo-ui2.${baseUrl}"
+APPLICATION_BUILD_NAME = "ui-test"
+APP_VERSION = "latest"
 pipeline {
   agent {
     kubernetes {
@@ -99,6 +101,32 @@ spec:
   // Pipeline Stages start here
   // Requeres at least one stage
   stages {
+    stage('Checkout SCM & Initialize') {
+      steps {
+        script {
+          container('node') {
+            checkout scm: scm
+            // Turn off Git's SSL cert check, uncomment if needed
+            // sh 'git config --global http.sslVerify false'
+            println("env.BRANCH_NAME:" + env.BRANCH_NAME)
+            println("env.GIT_COMMIT:" + env.GIT_COMMIT.substring(0, 6))
+            println("env.CHANGE_ID:" + env.CHANGE_ID)
+            // print out all environments
+            sh 'printenv'
+            sh "npm -v"
+            sh "node -v"
+
+            // setup application version and name if this branch requires app on demand
+            if (env.BRANCH_NAME.startsWith('feature-')) {
+              APP_VERSION = env.BRANCH_NAME.replaceAll('/', '')
+            } else if (env.BRANCH_NAME.startsWith('PR-') && env.CHANGE_BRANCH.startsWith('feature-') && env.CHANGE_TARGET.startsWith('develop')) {
+              // get the feature branch name from different variable when this is a PR case and not a commit to the feature branch itself
+              APP_VERSION = env.CHANGE_BRANCH.replaceAll('/', '')
+            }
+          }
+        }
+      }
+    }
     stage('install dependencies') {
       when {
         expression {
@@ -111,9 +139,6 @@ spec:
           sh 'ls /root/npmcache'
           sh 'export PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true'
           sh 'npm install --prefer-offline --cache=/root/npmcache'
-
-          // print out all environments
-          sh 'printenv'
         }
       }
     }
@@ -166,10 +191,10 @@ spec:
             // Run Sonar in this block would result into authorization issue. As the ${user} and ${pass} are encrypted ***** **** instead of plan values
             container('sonar'){
               // Create a new SonarQube analysis and dashboard for this new/updated feature branch / app
-              //def additionalParams =  (env.BRANCH_NAME.startsWith('feature-')) ? " -Dsonar.projectKey=${APPLICATION_BUILD_NAME} -Dsonar.projectName=${APPLICATION_BUILD_NAME} -Dsonar.projectVersion=${env.GIT_COMMIT.substring(0, 6)}" : ""
+              def additionalParams =  (env.BRANCH_NAME.startsWith('feature-')) ? " -Dsonar.projectKey=${APPLICATION_BUILD_NAME}-${APP_VERSION} -Dsonar.projectName=${APPLICATION_BUILD_NAME}-${APP_VERSION} -Dsonar.projectVersion=${env.GIT_COMMIT.substring(0, 6)}" : ""
 
               // Run Sonar in this block to ensure user/pass are not encrypted
-              sh "sonar-scanner -Dsonar.host.url=http://sonarqube-sonarqube:9000 -Dsonar.login=${user} -Dsonar.password=${pass}"// ${additionalParams}"
+              sh "sonar-scanner -Dsonar.host.url=http://sonarqube-sonarqube:9000 -Dsonar.login=${user} -Dsonar.password=${pass} ${additionalParams}"
             }
           }
         }
@@ -182,14 +207,36 @@ spec:
           return (env.BRANCH_NAME.startsWith('feature-') || env.BRANCH_NAME == 'develop')
         }
       }
+      environment {
+        GIT_CREDS = credentials('git-jm')
+      }
       steps{
         container('node'){
           sh 'npm run prod'
           container('docker'){
             script {
               docker.withRegistry('https://docker.'+baseUrl, 'nexus') {
-                def customImage = docker.build("docker.${baseUrl}/ui-test:0.0.${env.BUILD_NUMBER}", "--network=host .")
-                customImage.push()
+                DOCKER_IMAGE = docker.build("docker.${baseUrl}/${APPLICATION_BUILD_NAME}:${APP_VERSION}-${env.BUILD_NUMBER}", "--network=host .")
+                DOCKER_IMAGE.push()
+                // Always oush `latest` tag for either PR build or `master` build
+                if (env.BRANCH_NAME.startsWith('feature-')) {
+                  DOCKER_IMAGE.push("${APP_VERSION}-latest")
+                } else if(env.BRANCH_NAME == 'develop') {
+                  DOCKER_IMAGE.push("${APP_VERSION}")
+                }
+              }
+
+              // Multi-branch workflow for Build and Tag Image based based on the env.BRANCH_NAME
+              if (env.BRANCH_NAME.startsWith('feature-')) {
+                container('tools') {
+                  sh "git clone https://$GIT_CREDS_USR:$GIT_CREDS_PSW@github.com/JihadMotii-REISys/ui-test2-deploy.git"
+                  sh "git config --global user.email 'ci@ci.com'"
+
+                  dir("ui-test2-deploy") {
+                    sh "cd ./feature && kustomize edit set image docker.${baseUrl}/${APPLICATION_BUILD_NAME}:${APP_VERSION}-${env.BUILD_NUMBER}"
+                    sh "git commit -am 'Publish new version' && git push || echo 'no changes'"
+                  }
+                }
               }
             }
           }
@@ -205,11 +252,14 @@ spec:
       }
       steps{
         container('trivy'){
-          withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: "nexus", passwordVariable: 'pass', usernameVariable: 'user']]) {
-            sh "export TRIVY_AUTH_URL=https://docker.${baseUrl}"
-            sh "export TRIVY_USERNAME=${user}"
-            sh "export TRIVY_PASSWORD=${pass}"
-            sh "trivy image docker.${baseUrl}/ui-test:0.0.${env.BUILD_NUMBER}"
+          script {
+            withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: "nexus", passwordVariable: 'pass', usernameVariable: 'user']]) {
+              sh "export TRIVY_AUTH_URL=https://docker.${baseUrl}"
+              sh "export TRIVY_USERNAME=${user}"
+              sh "export TRIVY_PASSWORD=${pass}"
+              def imageTag = (env.BRANCH_NAME.startsWith('PR-') && env.CHANGE_BRANCH.startsWith('feature-') && env.CHANGE_TARGET.startsWith('develop')) ? "${APP_VERSION}-latest" : "${APP_VERSION}-${env.BUILD_NUMBER}"
+              sh "trivy image docker.${baseUrl}/${APPLICATION_BUILD_NAME}:${imageTag}"
+            }
           }
         }
       }
@@ -222,15 +272,15 @@ spec:
         }
       }
       environment {
-        GIT_CREDS = credentials('git')
+        GIT_CREDS = credentials('git-jm')
       }
       steps {
         container('tools') {
-          sh "git clone https://$GIT_CREDS_USR:$GIT_CREDS_PSW@github.com/diego-ruiz-rei/ui-test2-deploy.git"
+          sh "git clone https://$GIT_CREDS_USR:$GIT_CREDS_PSW@github.com/JihadMotii-REISys/ui-test2-deploy.git"
           sh "git config --global user.email 'ci@ci.com'"
 
           dir("ui-test2-deploy") {
-            sh "cd ./base && kustomize edit set image docker.${baseUrl}/ui-test:0.0.${env.BUILD_NUMBER}"
+            sh "cd ./develop && kustomize edit set image docker.${baseUrl}/${APPLICATION_BUILD_NAME}:${APP_VERSION}-${env.BUILD_NUMBER}"
             sh "git commit -am 'Publish new version' && git push || echo 'no changes'"
           }
         }
@@ -276,6 +326,59 @@ spec:
             //publish 508 compliance report files
             //zip zipFile: 'AccessibilityReport.zip', archive: true, dir: 'acceptance-tests/target/AccessibilityReport/'
             archiveArtifacts allowEmptyArchive: true, artifacts: 'acceptance-tests/target/AccessibilityReport/*.txt', onlyIfSuccessful: false, fingerprint: true
+          }
+        }
+      }
+    }
+
+    stage('Promote from Dev to Stage') {
+      when {
+        expression {
+          return env.BRANCH_NAME == 'develop'
+        }
+      }
+      environment {
+        GIT_CREDS = credentials('git-jm')
+      }
+      steps {
+        container('tools') {
+          dir("ui-test2-deploy") {
+            sh "cd ./staging && kustomize edit set image docker.${baseUrl}/${APPLICATION_BUILD_NAME}:${APP_VERSION}-${env.BUILD_NUMBER}"
+            sh "git commit -am 'Publish new version' && git push || echo 'no changes'"
+          }
+        }
+      }
+    }
+
+    stage('Promote from Stage to Prod') {
+      when {
+        expression {
+          return env.BRANCH_NAME == 'master'
+        }
+      }
+      environment {
+        GIT_CREDS = credentials('git-jm')
+      }
+      steps {
+        container('docker'){
+          script {
+            def imageTag = "master-${env.BUILD_NUMBER}"
+            docker.withRegistry('https://docker.'+baseUrl, 'nexus') {
+              // Pull APP_VERSION=`latest` image tagged through `develop` branch pipeline when a PR get's merged into it
+              DOCKER_IMAGE = docker.image("docker.${baseUrl}/${APPLICATION_BUILD_NAME}:${APP_VERSION}")
+              DOCKER_IMAGE.pull()
+              DOCKER_IMAGE.push("${imageTag}")
+            }
+
+            container('tools') {
+              sh "git clone https://$GIT_CREDS_USR:$GIT_CREDS_PSW@github.com/JihadMotii-REISys/ui-test2-deploy.git"
+              sh "git config --global user.email 'ci@ci.com'"
+
+              dir("ui-test2-deploy") {
+                sh "cd ./prod && kustomize edit set image docker.${baseUrl}/${APPLICATION_BUILD_NAME}:${imageTag}"
+                sh "git commit -am 'Publish new version' && git push || echo 'no changes'"
+              }
+            }
           }
         }
       }
