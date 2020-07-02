@@ -253,11 +253,11 @@ spec:
       }
       steps{
         container('trivy'){
+          def imageTag = (env.BRANCH_NAME.startsWith('PR-') && env.CHANGE_BRANCH.startsWith('feature-') && env.CHANGE_TARGET.startsWith('develop')) ? "${APP_VERSION}-latest" : "${APP_VERSION}-${env.BUILD_NUMBER}"
           withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: "nexus", passwordVariable: 'pass', usernameVariable: 'user']]) {
             sh "export TRIVY_AUTH_URL=https://docker.${baseUrl}"
             sh "export TRIVY_USERNAME=${user}"
             sh "export TRIVY_PASSWORD=${pass}"
-            def imageTag = (env.BRANCH_NAME.startsWith('PR-') && env.CHANGE_BRANCH.startsWith('feature-') && env.CHANGE_TARGET.startsWith('develop')) ? "${APP_VERSION}-latest" : "${APP_VERSION}-${env.BUILD_NUMBER}"
             sh "trivy image docker.${baseUrl}/${APPLICATION_BUILD_NAME}:${imageTag}"
           }
         }
