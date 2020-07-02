@@ -221,7 +221,7 @@ spec:
     stage('Run kubectl') {
       steps {
         container('kubectl') {
-          sh "kubectl get pods"
+          // sh "kubectl get pods"
         }
       }
     }
