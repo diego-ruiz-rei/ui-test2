@@ -1,0 +1,11 @@
+# Default values for testapp.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+
+global:
+  source:
+    repoURL: https://github.com/JihadMotii-REISys/ui-test2-deploy.git
+    targetRevision: HEAD
+    path: base
+

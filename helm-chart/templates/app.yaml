@@ -1,0 +1,41 @@
+# https://nortal.com/us/blog/gitops-argocd/ -> Dynamically create for each namespace
+# https://github.com/kubernetes-sigs/kustomize/tree/master/examples
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ .Chart.Name }}-{{ .Values.branch.name }}-{{ .Values.destination.namespace }}
+  #name: {{ .Chart.Name }}-{{ .Values.destination.namespace }}
+  # You'll usually want to add your resources to the argocd namespace.
+  namespace: argocd
+  # Add a this finalizer ONLY if you want these to cascade delete.
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  # The project the application belongs to.
+  project: default
+
+  # Source of the application manifests
+  source:
+    repoURL: {{ .Values.global.source.repoURL }}
+    targetRevision: {{ .Values.global.source.targetRevision }}
+    path: "{{ .Values.destination.namespace }}"
+
+  # Destination cluster and namespace to deploy the application
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: "{{ .Values.destination.namespace }}"
+
+  # Sync policy
+  syncPolicy:
+    automated:
+      prune: true # Specifies if resources should be pruned during auto-syncing ( false by default ).
+      selfHeal: true # Specifies if partial app sync should be executed when resources are changed only in target Kubernetes cluster and no git change detected ( false by default ).
+    syncOptions:     # Sync options which modifies sync behavior
+    - Validate=false # disables resource validation (equivalent to 'kubectl apply --validate=true')
+
+  # Ignore differences at the specified json pointers
+  ignoreDifferences:
+  - group: apps
+    kind: Deployment
+    jsonPointers:
+    - /spec/replicas
