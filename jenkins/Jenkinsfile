@@ -64,17 +64,6 @@ spec:
     command:
     - cat
     tty: true
-  # used to run argocd/cli processes for feature branches
-  - name: argocli
-    image: argoproj/argocd-cli:v0.10.6
-    command:
-    - cat
-    tty: true
-  - name: kubectl
-    image: lachlanevenson/k8s-kubectl:latest
-    command:
-    - cat
-    tty: true
   - name: helm
     image: lachlanevenson/k8s-helm:latest
     command:
@@ -218,22 +207,6 @@ spec:
       }
     }
 
-    stage('Run kubectl') {
-      steps {
-        container('kubectl') {
-          sh "kubectl get pods -n feature"
-        }
-      }
-    }
-
-    stage('Run helm') {
-      steps {
-        container('helm') {
-          // sh "helm list"
-        }
-      }
-    }
-
     stage('Build and Deploy Image'){
       when {
         expression {
@@ -269,19 +242,7 @@ spec:
                     sh "cd ./feature && kustomize edit set image docker.${baseUrl}/${APPLICATION_BUILD_NAME}:${APP_VERSION}-${env.BUILD_NUMBER}"
                     sh "git commit -am 'Publish new version' && git push || echo 'no changes'"
 
-                    sh "helm install demo-ui2-${APP_VERSION}-feature ./argocd-app --set branch.name=${APP_VERSION} --set destination.namespace=feature -n feature"
-//                    container('argocli') {
-//                      // Spin up application on demand
-//                      withCredentials([string(credentialsId: "argocd-ci", variable: 'ARGOCD_AUTH_TOKEN')]) {
-//                        // sh "export ARGOCD_SERVER=argocd.${baseUrl}"
-//                        // Already been set by `withCredentials`
-//                        // sh "export ARGOCD_AUTH_TOKEN=${ARGOCD_AUTH_TOKEN}"
-//                        // sh "argocd app create ${APPLICATION_BUILD_NAME}-${APP_VERSION} --file feature/manifest.yaml --dest-server https://kubernetes.default.svc --dest-namespace default"
-//                        // sh "argocd app sync ${APPLICATION_BUILD_NAME}-${APP_VERSION}"
-//                        sh "argocd app sync ${APPLICATION_BUILD_NAME}-${APP_VERSION} --local feature/"
-//                        sh "argocd app wait ${APPLICATION_BUILD_NAME}-${APP_VERSION} --timeout 600"
-//                      }
-//                    }
+                    sh "helm install demo-ui2-${APP_VERSION}-feature ./argocd-app --set branch.name=${APP_VERSION} --set destination.namespace=feature"
                   }
                 }
               }
