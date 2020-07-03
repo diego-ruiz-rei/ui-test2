@@ -122,6 +122,8 @@ spec:
             sh "npm -v"
             sh "node -v"
 
+            //notifySlack('STARTED', 'Job started!')
+
             // setup application version and name if this branch requires app on demand
             if (env.BRANCH_NAME.startsWith('feature-')) {
               APP_VERSION = env.BRANCH_NAME.replaceAll('/', '')
@@ -141,6 +143,12 @@ spec:
       }
       steps {
         container('node'){
+          // Report back to github: Status Check PENDING
+          // notifyGithubStatusCheck('PENDING', 'Continuous integration started!')
+
+          // Report back to github: Status Check PENDING
+          // notifyGithubStatusCheck('PENDING', 'Continuous integration: Build the App!')
+
           //sh 'ls node_modules'
           sh 'ls /root/npmcache'
           sh 'export PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true'
@@ -188,7 +196,7 @@ spec:
       }
       steps {
         // Report back to github: Status Check PENDING
-        //notifyGithubStatusCheck('PENDING', 'Continuous integration: Run code analysis!')
+        // notifyGithubStatusCheck('PENDING', 'Continuous integration: Run code analysis!')
 
         script {
           withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: "sonar", passwordVariable: 'pass', usernameVariable: 'user']]) {
@@ -197,10 +205,10 @@ spec:
             // Run Sonar in this block would result into authorization issue. As the ${user} and ${pass} are encrypted ***** **** instead of plan values
             container('sonar'){
               // Create a new SonarQube analysis and dashboard for this new/updated feature branch / app
-              def additionalParams =  (env.BRANCH_NAME.startsWith('feature-')) ? " -Dsonar.projectKey=${APPLICATION_BUILD_NAME}-${APP_VERSION} -Dsonar.projectName=${APPLICATION_BUILD_NAME}-${APP_VERSION} -Dsonar.projectVersion=${env.GIT_COMMIT.substring(0, 6)}" : ""
+              def additionalParams =  (env.BRANCH_NAME.startsWith('feature-')) ? " -Dsonar.projectKey=${APPLICATION_BUILD_NAME}-${APP_VERSION} -Dsonar.projectName=${APPLICATION_BUILD_NAME}-${APP_VERSION}" : ""
 
               // Run Sonar in this block to ensure user/pass are not encrypted
-              sh "sonar-scanner -Dsonar.host.url=http://sonarqube-sonarqube:9000 -Dsonar.login=${user} -Dsonar.password=${pass} ${additionalParams}"
+              sh "sonar-scanner -Dsonar.host.url=http://sonarqube-sonarqube:9000 -Dsonar.login=${user} -Dsonar.password=${pass} -Dsonar.projectVersion=${env.GIT_COMMIT.substring(0, 6)} ${additionalParams}"
             }
           }
         }
@@ -217,6 +225,9 @@ spec:
         GIT_CREDS = credentials('git-jm')
       }
       steps{
+        // Report back to github: Status Check PENDING
+        // notifyGithubStatusCheck('PENDING', 'Continuous integration: Build & Deploy image!')
+
         container('node'){
           sh 'npm run prod'
           container('docker'){
@@ -239,7 +250,13 @@ spec:
                   sh "git config --global user.email 'ci@ci.com'"
 
                   dir("ui-test2-deploy") {
-                    sh "cd ./feature && kustomize edit set image docker.${baseUrl}/${APPLICATION_BUILD_NAME}:${APP_VERSION}-${env.BUILD_NUMBER}"
+                    // check if this feature branch is new (first commit)
+                    if (!fileExists("./${APP_VERSION}/kustomization.yaml")) {
+                      sh "cp -rf ./feature ./${APP_VERSION}"
+                      sh "git add ./${APP_VERSION}"
+                    }
+
+                    sh "cd ./${APP_VERSION} && kustomize edit set image docker.${baseUrl}/${APPLICATION_BUILD_NAME}:${APP_VERSION}-${env.BUILD_NUMBER} && kustomize edit set namesuffix -- -${APP_VERSION}"
                     sh "git commit -am 'Publish new version' && git push || echo 'no changes'"
 
                     try {
@@ -263,6 +280,9 @@ spec:
         }
       }
       steps{
+        // Report back to github: Status Check PENDING
+        // notifyGithubStatusCheck('PENDING', 'Continuous integration: Run security scan!')
+
         container('trivy'){
           script {
             withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: "nexus", passwordVariable: 'pass', usernameVariable: 'user']]) {
@@ -396,6 +416,55 @@ spec:
       }
     }
   }
+
+  post {
+    always {
+      echo 'This will always run'
+    }
+    success {
+      echo 'This will run only if successful'
+      // notifySlack('SUCCESS', 'Job successfully finished!')
+
+      // Report back to github: Status Check to enable the PR for merge
+      // notifyGithubStatusCheck('SUCCESS', 'Continuous integration succeeded!')
+    }
+    failure {
+      echo 'This will run only if failed'
+      // notifySlack('FAILED', 'Job failed!')
+
+      // Report back to github: Status Check to disable the PR for merge
+      // notifyGithubStatusCheck('FAILURE', 'Continuous integration failed!')
+    }
+    unstable {
+      echo 'This will run only if the run was marked as unstable'
+      // notifySlack('UNSTABLE', 'Job unstable!')
+    }
+    changed {
+      echo 'This will run only if the state of the Pipeline has changed'
+      echo 'For example, if the Pipeline was previously failing but is now successful'
+    }
+  }
+}
+
+def notifySlack(String buildStatus = 'STARTED', additionalMessage = null) {
+  // Build status of null means success.
+  buildStatus = buildStatus ?: 'SUCCESS'
+
+  def color
+
+  if (buildStatus == 'STARTED') {
+    color = '#D4DADF'
+  } else if (buildStatus == 'SUCCESS') {
+    color = '#BDFFC3'
+  } else if (buildStatus == 'UNSTABLE') {
+    color = '#FFFE89'
+  } else {
+    color = '#FF9FA1'
+  }
+
+  def msg = "${buildStatus}: `${env.JOB_NAME}` #${env.BUILD_NUMBER}:\n${env.BUILD_URL}\n${additionalMessage}"
+
+  slackSend(color: color, message: msg)
 }
 
 // Report back to github: Status Check to enable or disable the PR for merge
