@@ -250,10 +250,6 @@ spec:
                   sh "git config --global user.email 'ci@ci.com'"
 
                   dir("ui-test2-deploy") {
-//                    sh """
-//                      sed -i 's@__BRANCH_NAME__@${APP_VERSION}@' ./feature/kustomization.yaml
-//                      """
-
                     // check if this feature branch is new (first commit)
                     if (!fileExists("./${APP_VERSION}/kustomization.yaml")) {
                       sh "cp -rf ./feature ./${APP_VERSION}"
