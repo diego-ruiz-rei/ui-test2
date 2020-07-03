@@ -1,4 +1,5 @@
 #!groovy
+// https://github.com/argoproj/argo-cd-hello-world-app/blob/master/Jenkinsfile
 // This script works with native Jenkins pipeline
 // Jenkins declarative Pipeline as it is the future: https://stackoverflow.com/questions/44657896/jenkins-pipeline-jenkinsfile-node-and-pipeline-directives
 def baseUrl="jmeks2020.reisys.io"
@@ -60,6 +61,11 @@ spec:
   # used to run argocd/git processes
   - name: tools
     image: argoproj/argo-cd-ci-builder:latest
+    command:
+    - cat
+    tty: true
+  - name: helm
+    image: lachlanevenson/k8s-helm:latest
     command:
     - cat
     tty: true
@@ -235,6 +241,12 @@ spec:
                   dir("ui-test2-deploy") {
                     sh "cd ./feature && kustomize edit set image docker.${baseUrl}/${APPLICATION_BUILD_NAME}:${APP_VERSION}-${env.BUILD_NUMBER}"
                     sh "git commit -am 'Publish new version' && git push || echo 'no changes'"
+
+                    try {
+                      sh "helm upgrade ${APPLICATION_BUILD_NAME}-${APP_VERSION} ./argocd-app --set branch.name=${APP_VERSION} --set destination.namespace=feature -n feature"
+                    } catch (Exception ex) {
+                      sh "helm install ${APPLICATION_BUILD_NAME}-${APP_VERSION} ./argocd-app --set branch.name=${APP_VERSION} --set destination.namespace=feature -n feature"
+                    }
                   }
                 }
               }
