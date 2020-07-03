@@ -250,7 +250,17 @@ spec:
                   sh "git config --global user.email 'ci@ci.com'"
 
                   dir("ui-test2-deploy") {
-                    sh "cd ./feature && kustomize edit set image docker.${baseUrl}/${APPLICATION_BUILD_NAME}:${APP_VERSION}-${env.BUILD_NUMBER}"
+//                    sh """
+//                      sed -i 's@__BRANCH_NAME__@${APP_VERSION}@' ./feature/kustomization.yaml
+//                      """
+
+                    // check if this feature branch is new (first commit)
+                    if (!fileExists("./${APP_VERSION}/kustomization.yaml")) {
+                      sh "cp -rf ./feature ./${APP_VERSION}"
+                      sh "git add ./${APP_VERSION}"
+                    }
+
+                    sh "cd ./${APP_VERSION} && kustomize edit set image docker.${baseUrl}/${APPLICATION_BUILD_NAME}:${APP_VERSION}-${env.BUILD_NUMBER} && kustomize edit set namesuffix ${APP_VERSION}"
                     sh "git commit -am 'Publish new version' && git push || echo 'no changes'"
 
                     try {
@@ -401,10 +411,7 @@ spec:
               sh "git config --global user.email 'ci@ci.com'"
 
               dir("ui-test2-deploy") {
-//                sh """
-//                  sed -i 's@__BRANCH_NAME__@${APP_VERSION}@' ./feature/kustomization.yaml
-//                  """
-                sh "cd ./prod && kustomize edit set image docker.${baseUrl}/${APPLICATION_BUILD_NAME}:${imageTag} && kustomize edit set namesuffix ${APP_VERSION}"
+                sh "cd ./prod && kustomize edit set image docker.${baseUrl}/${APPLICATION_BUILD_NAME}:${imageTag}"
                 sh "git commit -am 'Publish new version' && git push || echo 'no changes'"
               }
             }
