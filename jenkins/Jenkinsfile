@@ -269,7 +269,7 @@ spec:
                     sh "cd ./feature && kustomize edit set image docker.${baseUrl}/${APPLICATION_BUILD_NAME}:${APP_VERSION}-${env.BUILD_NUMBER}"
                     sh "git commit -am 'Publish new version' && git push || echo 'no changes'"
 
-                    sh "helm install demo-ui2-${APP_VERSION}-feature ./helm-chart --set branch.name=${APP_VERSION} --set destination.namespace=feature -n feature"
+                    sh "helm install demo-ui2-${APP_VERSION}-feature ./argocd-app --set branch.name=${APP_VERSION} --set destination.namespace=feature -n feature"
 //                    container('argocli') {
 //                      // Spin up application on demand
 //                      withCredentials([string(credentialsId: "argocd-ci", variable: 'ARGOCD_AUTH_TOKEN')]) {
