@@ -256,7 +256,7 @@ spec:
                       sh "git add ./${APP_VERSION}"
                     }
 
-                    sh "cd ./${APP_VERSION} && kustomize edit set image docker.${baseUrl}/${APPLICATION_BUILD_NAME}:${APP_VERSION}-${env.BUILD_NUMBER} && kustomize edit set namesuffix -${APP_VERSION}"
+                    sh "cd ./${APP_VERSION} && kustomize edit set image docker.${baseUrl}/${APPLICATION_BUILD_NAME}:${APP_VERSION}-${env.BUILD_NUMBER} && kustomize edit set namesuffix -- -${APP_VERSION}"
                     sh "git commit -am 'Publish new version' && git push || echo 'no changes'"
 
                     try {
