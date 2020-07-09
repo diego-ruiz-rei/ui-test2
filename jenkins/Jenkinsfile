@@ -253,6 +253,7 @@ spec:
                     // check if this feature branch is new (first commit)
                     if (!fileExists("./${APP_VERSION}/kustomization.yaml")) {
                       sh "cp -rf ./feature ./${APP_VERSION}"
+                      sh "sed -i 's@__BRANCH_NAME__@${APP_VERSION}@' ./${APP_VERSION}/ingress.yaml" // rename the host URL for this newly feature App
                       sh "git add ./${APP_VERSION}"
                     }
 
