@@ -2,7 +2,7 @@
 // https://github.com/argoproj/argo-cd-hello-world-app/blob/master/Jenkinsfile
 // This script works with native Jenkins pipeline
 // Jenkins declarative Pipeline as it is the future: https://stackoverflow.com/questions/44657896/jenkins-pipeline-jenkinsfile-node-and-pipeline-directives
-def baseUrl="jmeks2020.reisys.io"
+def baseUrl="jmeks20.reisys.io"
 // Define variables for the pipeline usage
 def sonarLogin, sonarPassword
 def APPLICATION_BUILD_NAME, APP_VERSION, SELENIUM_HUB, APPLICATION_URL_DEV, DOCKER_IMAGE
