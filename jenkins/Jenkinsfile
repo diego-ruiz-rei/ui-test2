@@ -144,10 +144,10 @@ spec:
       steps {
         container('node'){
           // Report back to github: Status Check PENDING
-          // notifyGithubStatusCheck('PENDING', 'Continuous integration started!')
+          notifyGithubStatusCheck('PENDING', 'Continuous integration started!')
 
           // Report back to github: Status Check PENDING
-          // notifyGithubStatusCheck('PENDING', 'Continuous integration: Build the App!')
+          notifyGithubStatusCheck('PENDING', 'Continuous integration: Build the App!')
 
           //sh 'ls node_modules'
           sh 'ls /root/npmcache'
@@ -167,7 +167,7 @@ spec:
         container('node'){
           container('puppeteer'){
             // Report back to github: Status Check PENDING
-            // notifyGithubStatusCheck('PENDING', 'Continuous integration: Run unit test!')
+            notifyGithubStatusCheck('PENDING', 'Continuous integration: Run unit test!')
 
             sh 'CI=true npm run test:headless'
           }
@@ -196,7 +196,7 @@ spec:
       }
       steps {
         // Report back to github: Status Check PENDING
-        // notifyGithubStatusCheck('PENDING', 'Continuous integration: Run code analysis!')
+        notifyGithubStatusCheck('PENDING', 'Continuous integration: Run code analysis!')
 
         script {
           withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: "sonar", passwordVariable: 'pass', usernameVariable: 'user']]) {
@@ -226,7 +226,7 @@ spec:
       }
       steps{
         // Report back to github: Status Check PENDING
-        // notifyGithubStatusCheck('PENDING', 'Continuous integration: Build & Deploy image!')
+        notifyGithubStatusCheck('PENDING', 'Continuous integration: Build & Deploy image!')
 
         container('node'){
           sh 'npm run prod'
@@ -253,6 +253,7 @@ spec:
                     // check if this feature branch is new (first commit)
                     if (!fileExists("./${APP_VERSION}/kustomization.yaml")) {
                       sh "cp -rf ./feature ./${APP_VERSION}"
+                      sh "sed -i 's@__BRANCH_NAME__@${APP_VERSION}@' ./${APP_VERSION}/ingress.yaml" // rename the host URL for this newly feature App
                       sh "git add ./${APP_VERSION}"
                     }
 
@@ -281,7 +282,7 @@ spec:
       }
       steps{
         // Report back to github: Status Check PENDING
-        // notifyGithubStatusCheck('PENDING', 'Continuous integration: Run security scan!')
+        notifyGithubStatusCheck('PENDING', 'Continuous integration: Run security scan!')
 
         container('trivy'){
           script {
@@ -426,14 +427,14 @@ spec:
       // notifySlack('SUCCESS', 'Job successfully finished!')
 
       // Report back to github: Status Check to enable the PR for merge
-      // notifyGithubStatusCheck('SUCCESS', 'Continuous integration succeeded!')
+      notifyGithubStatusCheck('SUCCESS', 'Continuous integration succeeded!')
     }
     failure {
       echo 'This will run only if failed'
       // notifySlack('FAILED', 'Job failed!')
 
       // Report back to github: Status Check to disable the PR for merge
-      // notifyGithubStatusCheck('FAILURE', 'Continuous integration failed!')
+      notifyGithubStatusCheck('FAILURE', 'Continuous integration failed!')
     }
     unstable {
       echo 'This will run only if the run was marked as unstable'
